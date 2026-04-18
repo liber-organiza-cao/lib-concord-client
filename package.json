@@ -1,0 +1,22 @@
+{
+  "name": "lib-concord-client",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "tsc"
+  },
+  "license": "MIT or UNLICENSED",
+  "type": "module",
+  "dependencies": {
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
+    "@scure/bip39": "^2.0.1",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}
