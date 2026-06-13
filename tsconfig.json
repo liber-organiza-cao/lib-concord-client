@@ -6,6 +6,5 @@
     "outDir": "./dist",
     "strict": true,
     "declaration": true,
-    "declarationMap": true
   }
 }

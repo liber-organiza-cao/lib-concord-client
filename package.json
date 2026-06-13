@@ -14,7 +14,8 @@
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@scure/bip39": "^2.0.1",
-    "socket.io-client": "^4.8.3"
+    "@types/jsonwebtoken": "^9.0.10",
+    "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {
     "typescript": "^6.0.3"
