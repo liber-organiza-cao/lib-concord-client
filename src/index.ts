@@ -1,97 +1,152 @@
 
-import { SocketIoConnection, IO, Message } from "./socket.io.js";
-import { challengeConfirm, challengeRequest } from "./http.js";
-import { type Autenticator } from "./autenticator.js";
-import { err, ok, Result } from "./utils.js";
-import * as sha from '@noble/hashes/sha2.js';
+import { Client as JsonRPCClient } from "./jsonrpc.js";
+import { getInfo } from "./http.js";
+
+type Session = {
+    publicKey: Uint8Array,
+    isAdmin: boolean,
+    authToken: string,
+    currentChannel?: Channel,
+}
 
 export class Client {
-    socketIo: SocketIoConnection;
-    _publicKey: Uint8Array;
-    _isAdmin: boolean = false;
-    _currentChannel: string | null = null;
+    private _url: string;
+    private _rpc: JsonRPCClient<ClientToServerEvents, ServerToClientEvents>;
+    private _session?: Session;
 
-    on: typeof this.socketIo.on;
-    emit: typeof this.socketIo.emit;
-    disconnect: typeof this.socketIo.disconnect;
+    public onOpen?: () => void;
+    public onClose?: () => void;
+    public onError?: () => void;
 
-    constructor(url: string, authToken: string, publicKey: Uint8Array, isAdmin: boolean = false) {
-        this.socketIo = IO(url, authToken);
-        this._publicKey = publicKey;
-        this._isAdmin = isAdmin;
-        this.on = this.socketIo.on.bind(this.socketIo);
-        this.emit = this.socketIo.emit.bind(this.socketIo);
-        this.disconnect = this.socketIo.disconnect.bind(this.socketIo);
-    }
+    public onMessageReceived?: (message: Message) => void;
 
-    static async init(url: string, authenticator: Autenticator): Promise<Result<Client, any>> {
-        const publicKey = authenticator.publicKey();
-        const [okay, challenge] = await challengeRequest(url, publicKey);
+    public close: typeof JsonRPCClient.prototype.close;
 
-        if (!okay) {
-            return err(challenge);
-        } else {
-            const { token } = challenge;
-            const hash = sha.sha256(new TextEncoder().encode(token));
-            const signature = authenticator.sign(hash);
-            const [okay, auth] = await challengeConfirm(url, token, signature);
+    constructor(url: string) {
+        this._rpc = new JsonRPCClient(`${url}/ws`);
+        this._url = url;
 
-            if (!okay) {
-                return err(auth);
-            } else {
-                const { token, payload } = auth
+        this.close = this._rpc.close.bind(this._rpc);
 
-                const client = new Client(url, token, publicKey, payload.is_admin);
-
-                return ok(client);
-            }
+        this._rpc.onOpen = () => {
+            this.onOpen?.();
         }
-    }
+        this._rpc.onClose = () => {
+            this._session = undefined;
 
-    async joinChannel(id: string): Promise<Result<void, void>> {
-        return new Promise((resolve) => {
-            this.emit("joinChannel", id, (success) => {
-                if (success) {
-                    this._currentChannel = id;
-                    resolve(ok(void 0));
-                } else {
-                    this._currentChannel = null;
-                    resolve(err(void 0));
-                }
-            });
+            this.onClose?.();
+        }
+        this._rpc.onError = () => {
+            this.onError?.();
+        }
+
+        this._rpc.on("messageReceived", (message) => {
+            this.onMessageReceived?.(message);
         });
     }
 
-    async loadMessages(beforeId?: string): Promise<Message[]> {
-        return new Promise((resolve) => {
-            this.emit("loadMessages", beforeId, (messages) => {
-                resolve(messages);
-            });
-        });
+    async getInfo() {
+        return await getInfo(this._url);
     }
 
-    sendMessage(message: string): Result<void, void> {
-        if (!this._currentChannel) {
-            return err(void 0);
+    async requestChallenge(publicKey: Uint8Array) {
+        return await this._rpc.call("requestChallenge", Array.from(publicKey));
+    }
+
+    async confirmChallenge(token: string, signature: Uint8Array) {
+        return await this._rpc.call("confirmChallenge", token, Array.from(signature));
+    }
+
+    async auth(token: string) {
+        const payload = await this._rpc.call("auth", token);
+        this._session = {
+            publicKey: Uint8Array.from(payload.public_key),
+            isAdmin: payload.is_admin,
+            authToken: token,
+        };
+
+        return payload;
+    }
+
+    async joinChannel(id: string) {
+        if (!this._session) {
+            throw new Error("Not authenticated");
         }
-        this.emit("sendMessage", message);
-        return ok(void 0);
 
+        const channel = await this._rpc.call("joinChannel", id);
+
+        this._session.currentChannel = channel;
+
+        return channel;
     }
 
-    isConnected(): boolean {
-        return this.socketIo.connected;
+    async loadMessages(beforeId?: string) {
+        return await this._rpc.call("loadMessages", beforeId);
     }
 
-    isAdmin(): boolean {
-        return this._isAdmin;
+    async sendMessage(message: string) {
+        return await this._rpc.call("sendMessage", message);
     }
 
-    publicKey(): Uint8Array {
-        return this._publicKey!;
+    url() {
+        return this._url;
     }
 
-    currentChannel(): string | null {
-        return this._currentChannel;
+    isAuth() {
+        return !!this._session;
     }
+
+    isAdmin() {
+        return this._session?.isAdmin ?? false;
+    }
+
+    publicKey() {
+        return this._session?.publicKey;
+    }
+
+    currentChannel() {
+        return this._session?.currentChannel;
+    }
+}
+
+export interface Channel {
+    id: string,
+    name: string,
+}
+
+export interface Message {
+    id: string,
+    content: string,
+}
+
+export interface ResponseAuthChallenge {
+    token: string,
+}
+
+export interface ResponseConfirmAuthChallenge {
+    token: string,
+    payload: AuthenticatedPayload,
+}
+
+export interface AuthenticatedPayload {
+    public_key: number[],
+    is_admin: boolean,
+    exp: number,
+}
+
+interface ServerToClientEvents {
+    messageReceived(message: Message): void,
+}
+
+interface ClientToServerEvents {
+    auth(token: string): AuthenticatedPayload,
+    requestChallenge(publicKey: number[]): ResponseAuthChallenge,
+    confirmChallenge(token: string, signature: number[]): ResponseConfirmAuthChallenge,
+
+    joinChannel(channelId: string): Channel,
+    sendMessage(message: string): void,
+    loadMessages(beforeId?: string): Message[],
+
+    createChannel(name: string): void,
+    deleteChannel(channelId: string): void,
 }
