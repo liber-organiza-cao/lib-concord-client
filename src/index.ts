@@ -88,6 +88,18 @@ export class Client {
         return await this._rpc.call("sendMessage", message);
     }
 
+    async createChannel(name: string) {
+        return await this._rpc.call("createChannel", name);
+    }
+
+    async deleteChannel(channelId: string) {
+        return await this._rpc.call("deleteChannel", channelId);
+    }
+
+    async listChannels() {
+        return await this._rpc.call("listChannels");
+    }
+
     url() {
         return this._url;
     }
@@ -134,6 +146,11 @@ export interface AuthenticatedPayload {
     exp: number,
 }
 
+export interface Channel {
+    id: string,
+    name: string,
+}
+
 interface ServerToClientEvents {
     messageReceived(message: Message): void,
 }
@@ -149,4 +166,5 @@ interface ClientToServerEvents {
 
     createChannel(name: string): void,
     deleteChannel(channelId: string): void,
+    listChannels(): Channel[]
 }
