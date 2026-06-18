@@ -50,17 +50,17 @@ export class Client {
     }
 
     async requestChallenge(publicKey: Uint8Array) {
-        return await this._rpc.call("requestChallenge", Array.from(publicKey));
+        return await this._rpc.call("requestChallenge", publicKey.toHex());
     }
 
     async confirmChallenge(token: string, signature: Uint8Array) {
-        return await this._rpc.call("confirmChallenge", token, Array.from(signature));
+        return await this._rpc.call("confirmChallenge", token, signature.toHex());
     }
 
     async auth(token: string) {
         const payload = await this._rpc.call("auth", token);
         this._session = {
-            publicKey: Uint8Array.from(payload.public_key),
+            publicKey: Uint8Array.fromHex(payload.public_key),
             isAdmin: payload.is_admin,
             authToken: token,
         };
@@ -141,7 +141,7 @@ export interface ResponseConfirmAuthChallenge {
 }
 
 export interface AuthenticatedPayload {
-    public_key: number[],
+    public_key: string,
     is_admin: boolean,
     exp: number,
 }
@@ -157,8 +157,8 @@ interface ServerToClientEvents {
 
 interface ClientToServerEvents {
     auth(token: string): AuthenticatedPayload,
-    requestChallenge(publicKey: number[]): ResponseAuthChallenge,
-    confirmChallenge(token: string, signature: number[]): ResponseConfirmAuthChallenge,
+    requestChallenge(publicKey: string): ResponseAuthChallenge,
+    confirmChallenge(token: string, signature: string): ResponseConfirmAuthChallenge,
 
     joinChannel(channelId: string): Channel,
     sendMessage(message: string): void,

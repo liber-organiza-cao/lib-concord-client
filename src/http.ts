@@ -1,5 +1,6 @@
 export interface GetInfoResponse {
     title: string,
+    public_key: string
 }
 
 export async function getInfo(url: string): Promise<GetInfoResponse> {
