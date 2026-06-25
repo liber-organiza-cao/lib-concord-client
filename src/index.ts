@@ -84,8 +84,8 @@ export class Client {
         return await this._rpc.call("loadMessages", beforeId);
     }
 
-    async sendMessage(message: string) {
-        return await this._rpc.call("sendMessage", message);
+    async sendMessage(message: string, attachments: string[]) {
+        return await this._rpc.call("sendMessage", message, attachments);
     }
 
     async createChannel(name: string) {
@@ -129,6 +129,15 @@ export interface Channel {
 export interface Message {
     id: string,
     content: string,
+    attachments: MessageAttachment[]
+}
+
+export interface MessageAttachment {
+    id: string,
+    name: string,
+    mime_type: string,
+    size: number,
+    hash: string,
 }
 
 export interface ResponseAuthChallenge {
@@ -153,6 +162,7 @@ export interface Channel {
 
 interface ServerToClientEvents {
     messageReceived(message: Message): void,
+    channelDeleted(channel: Channel): void
 }
 
 interface ClientToServerEvents {
@@ -161,10 +171,10 @@ interface ClientToServerEvents {
     confirmChallenge(token: string, signature: string): ResponseConfirmAuthChallenge,
 
     joinChannel(channelId: string): Channel,
-    sendMessage(message: string): void,
+    sendMessage(message: string, attachments: string[]): void,
     loadMessages(beforeId?: string): Message[],
 
-    createChannel(name: string): void,
-    deleteChannel(channelId: string): void,
+    createChannel(name: string): Channel,
+    deleteChannel(channelId: string): Channel,
     listChannels(): Channel[]
 }
