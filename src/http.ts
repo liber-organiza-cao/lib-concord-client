@@ -35,7 +35,7 @@ export async function postFiles(url: string, files: FileList): Promise<File[]> {
     return response.json();
 }
 
-export async function getFile(url: string, id: string) {
+export async function getFile(url: string, id: string): Promise<Blob> {
     const response = await fetch(`${url}/files/${id}`, {
         method: "GET"
     });
